@@ -47,7 +47,6 @@
 
 -(void)setText:(NSString *)text{
     _text = text;
-//    [self drawRect:self.bounds];
     [self setNeedsDisplay];
 }
 
@@ -103,6 +102,7 @@ static CTTextAlignment CTTextAlignmentFromNSTextAlignment(NSTextAlignment alignm
 static CGFloat ascentCallback(void *ref){
     //!the height must fit the fontsize of titleView
     return [(__bridge UIFont*)ref pointSize] + 2;
+    // 如果ref字典中有height字段，可以使用下面的，返回高度
     return [(NSNumber*)[(__bridge NSDictionary*)ref objectForKey:@"height"] floatValue];
 }
 
@@ -123,8 +123,9 @@ static CGFloat widthCallback(void* ref){
     [super drawRect:rect];
     
     CGContextRef context = UIGraphicsGetCurrentContext();
+    // 清理rect区域的内容
     CGContextClearRect(context, self.bounds);
-    
+    // 设置画布背景颜色
     if (self.backgroundColor) {
         CGContextSaveGState(context);
         CGContextSetFillColorWithColor(context, self.backgroundColor.CGColor);
@@ -143,28 +144,21 @@ static CGFloat widthCallback(void* ref){
     //挪动path的bound，避免(ಥ_ಥ) 这样的符号会画不出来
     //move the bound of path,or some words like (ಥ_ಥ) won't be drawn
     CGRect pathRect = self.bounds;
-    pathRect.size.height += 5;
-    pathRect.origin.y -= 5;
+//    pathRect.size.height += 5;
+    pathRect.origin.y -= 3;
     CGPathAddRect(path, NULL, pathRect);
     
     //set line height font color and break mode
     CTFontRef fontRef = CTFontCreateWithName((__bridge CFStringRef)self.font.fontName, self.font.pointSize, NULL);
-//    CGFloat minLineHeight = self.font.pointSize + lineHeight_correction,
-//    maxLineHeight = minLineHeight,
     CGFloat linespacing = self.linespacing;
-    
     CTLineBreakMode lineBreakMode = kCTLineBreakByWordWrapping;
     CTTextAlignment alignment = CTTextAlignmentFromNSTextAlignment(self.textAlignment);
-    
     CTParagraphStyleRef style = CTParagraphStyleCreate((CTParagraphStyleSetting[4]){
         {kCTParagraphStyleSpecifierAlignment,sizeof(alignment),&alignment},
-//        {kCTParagraphStyleSpecifierMinimumLineHeight,sizeof(minLineHeight),&minLineHeight},
-//        {kCTParagraphStyleSpecifierMaximumLineHeight,sizeof(maxLineHeight),&maxLineHeight},
         {kCTParagraphStyleSpecifierMinimumLineSpacing,sizeof(linespacing),&linespacing},
         {kCTParagraphStyleSpecifierMaximumLineSpacing,sizeof(linespacing),&linespacing},
         {kCTParagraphStyleSpecifierLineBreakMode,sizeof(lineBreakMode),&lineBreakMode}
     }, 4);
-    
     NSDictionary* initAttrbutes = @{
                                     (NSString*)kCTFontAttributeName: (__bridge id)fontRef,
                                     (NSString*)kCTForegroundColorAttributeName:(id)self.textColor.CGColor,
@@ -185,7 +179,7 @@ static CGFloat widthCallback(void* ref){
     NSString* filteredText = [[NSString alloc] init];
     [RxLabel filtUrlWithOriginText:self.text urlArray:urlArray filteredText:&filteredText];
     
-    //init the attributed string
+    // 使用过滤后的字符串绘制
     NSMutableAttributedString* attrStr = [[NSMutableAttributedString alloc] initWithString:filteredText
                                                                                 attributes:initAttrbutes];
     //add url replaced run one by one with urlArray
@@ -218,29 +212,24 @@ static CGFloat widthCallback(void* ref){
     }
     
     //get lines in frame
-    NSArray* lines = (NSArray*)CTFrameGetLines(frame);
+    NSArray* lines    = (NSArray*)CTFrameGetLines(frame);
     CFIndex lineCount = [lines count];
-    
     //get origin point of each line
     CGPoint origins[lineCount];
     CTFrameGetLineOrigins(frame, CFRangeMake(0, 0), origins);
-    
     for (CFIndex index = 0; index < lineCount; index++) {
         //get line ref of line
         CTLineRef line = CFArrayGetValueAtIndex((CFArrayRef)lines, index);
-        
         //get run
         CFArrayRef glyphRuns = CTLineGetGlyphRuns(line);
         CFIndex glyphCount = CFArrayGetCount(glyphRuns);
         for (int i = 0; i < glyphCount; i++) {
             CTRunRef run = CFArrayGetValueAtIndex(glyphRuns, i);
-            
+            // 获取run的属性
             NSDictionary* attrbutes = (NSDictionary*)CTRunGetAttributes(run);
             //create hover frame
             if ([attrbutes objectForKey:@"url"]) {
-            
                 CGRect runBounds;
-                
                 CGFloat ascent;
                 CGFloat descent;
                 runBounds.size.width = CTRunGetTypographicBounds(run, CFRangeMake(0, 0), &ascent, &descent, NULL);
@@ -249,26 +238,31 @@ static CGFloat widthCallback(void* ref){
                 //!make sure you've add the origin of the line, or your alignment will not work on url replace runs
                 runBounds.origin.x = origins[index].x + CTLineGetOffsetForStringIndex(line, CTRunGetStringRange(run).location, NULL);
                 runBounds.origin.y = self.frame.size.height - origins[index].y - runBounds.size.height;
-            
                 //加上之前给 path 挪动位置时的修正
                 //add correction of move the path
-                runBounds.origin.y += 5;
-            
+                runBounds.origin.y += 3;
     #ifdef RXDEBUG
                 UIView* randomView = [[UIView alloc] initWithFrame:runBounds];
                 randomView.backgroundColor = [UIColor colorWithRed:arc4random()%255/255.0 green:arc4random()%255/255.0 blue:arc4random()%255/255.0 alpha:0.2];
                 [self addSubview:randomView];
     #endif
-            
-                NSString* urlStr = attrbutes[@"url"];
-                RxTextLinkTapView* linkButtonView = [self linkButtonViewWithFrame:runBounds UrlStr:urlStr];
-                [self addSubview:linkButtonView];
+                if (i==0) {
+                    // 使用这种方法，要计算出在Quarzt2D的坐标系下的位子
+                    runBounds.origin.y = self.bounds.size.height - runBounds.origin.y - runBounds.size.height;
+                    UIBezierPath *p = [UIBezierPath bezierPathWithRect:runBounds];
+                    CGContextAddPath(context, p.CGPath);
+                    [[UIColor redColor] set];
+                    CGContextDrawPath(context, kCGPathFill);
+                }else {
+                    NSString* urlStr = attrbutes[@"url"];
+                    RxTextLinkTapView* linkButtonView = [self linkButtonViewWithFrame:runBounds UrlStr:urlStr];
+                    [self addSubview:linkButtonView];
+                }
             }
         }
     }
     
     CTFrameDraw(frame, context);
-    
     CFRelease(frame);
     CFRelease(frameSetter);
     CFRelease(path);
@@ -309,6 +303,7 @@ static CGFloat widthCallback(void* ref){
 
 #pragma mark - filter url and generate display text and url array
 +(void)filtUrlWithOriginText:(NSString *)originText urlArray:(NSMutableArray *)urlArray filteredText:(NSString *__autoreleasing *)filterText{
+    
     *filterText = [NSString stringWithString:originText];
     NSArray* urlMatches = [[NSRegularExpression regularExpressionWithPattern:RxUrlRegular
                                                                      options:NSRegularExpressionDotMatchesLineSeparators error:nil]
@@ -325,9 +320,10 @@ static CGFloat widthCallback(void* ref){
         
         range.location += rangeOffset;
         rangeOffset -= (range.length - 1);
-       
+       // 使用OxFFFC作为占位符
         unichar objectReplacementChar = 0xFFFC;
         NSString * replaceContent = [NSString stringWithCharacters:&objectReplacementChar length:1];
+        // 去除url
         *filterText = [*filterText stringByReplacingCharactersInRange:range withString:replaceContent];
         
         range.length = 1;
@@ -343,21 +339,15 @@ static CGFloat widthCallback(void* ref){
     CGFloat height = 0;
     
     CGMutablePathRef path = CGPathCreateMutable();
+    // 先给很大，这样保存算出来的高度是正确的
     CGPathAddRect(path, NULL, CGRectMake(0, 0, width, 9999));
     
     //set line height font color and break mode
     CTFontRef fontRef = CTFontCreateWithName((__bridge CFStringRef)font.fontName, font.pointSize, NULL);
-    
-//    CGFloat minLineHeight = font.pointSize + lineHeight_correction,
-//    maxLineHeight = minLineHeight;
-    
     CTLineBreakMode lineBreakMode = kCTLineBreakByWordWrapping;
     CTTextAlignment alignment = kCTLeftTextAlignment;
-    
     CTParagraphStyleRef style = CTParagraphStyleCreate((CTParagraphStyleSetting[4]){
         {kCTParagraphStyleSpecifierAlignment,sizeof(alignment),&alignment},
-//        {kCTParagraphStyleSpecifierMinimumLineHeight,sizeof(minLineHeight),&minLineHeight},
-//        {kCTParagraphStyleSpecifierMaximumLineHeight,sizeof(maxLineHeight),&maxLineHeight},
         {kCTParagraphStyleSpecifierMinimumLineSpacing,sizeof(linespacing),&linespacing},
         {kCTParagraphStyleSpecifierMaximumLineSpacing,sizeof(linespacing),&linespacing},
         {kCTParagraphStyleSpecifierLineBreakMode,sizeof(lineBreakMode),&lineBreakMode}
@@ -368,8 +358,9 @@ static CGFloat widthCallback(void* ref){
                                     (NSString*)kCTFontAttributeName: (__bridge id)fontRef,
                                     (NSString*)kCTParagraphStyleAttributeName:(id)style
                                     };
-    
+    // 获取文本中所有连接
     NSMutableArray* urlArray = [NSMutableArray array];
+    // 变化后的文本
     NSString* filteredText = [[NSString alloc] init];
     [RxLabel filtUrlWithOriginText:text urlArray:urlArray filteredText:&filteredText];
     
@@ -378,32 +369,28 @@ static CGFloat widthCallback(void* ref){
                                                                                 attributes:initAttrbutes];
     for (NSDictionary* urlItem in urlArray) {
         //init run callbacks
+        // 设置run的delegate的另一种方法
         CTRunDelegateCallbacks callbacks;
         memset(&callbacks, 0, sizeof(CTRunDelegateCallbacks));
         callbacks.version = kCTRunDelegateVersion1;
-        callbacks.getAscent = ascentCallback;
+        callbacks.getAscent  = ascentCallback;
         callbacks.getDescent = descentCallback;
-        callbacks.getWidth = widthCallback;
+        callbacks.getWidth   = widthCallback;
         CTRunDelegateRef delegate = CTRunDelegateCreate(&callbacks, (__bridge void*)(font));
-        
         NSRange range = [[urlItem objectForKey:@"range"] rangeValue];
         NSString* urlStr = [urlItem objectForKey:@"urlStr"];
-        CFAttributedStringSetAttributes((CFMutableAttributedStringRef)attrStr, CFRangeMake(range.location, range.length), (CFDictionaryRef)@{
-                                                                                                                                             (NSString*)kCTRunDelegateAttributeName:(__bridge id)delegate,
-                                                                                                                                             @"url":urlStr
-                                                                                                                                             }, NO);
+        CFAttributedStringSetAttributes((CFMutableAttributedStringRef)attrStr,
+                                        CFRangeMake(range.location, range.length),
+                                        (CFDictionaryRef)@{(NSString*)kCTRunDelegateAttributeName:(__bridge id)delegate,@"url":urlStr                                                                                        },
+                                        NO);
         CFRelease(delegate);
     }
-    
-
     CTFramesetterRef frameSetter = CTFramesetterCreateWithAttributedString((CFAttributedStringRef)attrStr);
-    
     CGSize restrictSize = CGSizeMake(width, 10000);
     CGSize coreTestSize = CTFramesetterSuggestFrameSizeWithConstraints(frameSetter, CFRangeMake(0, 0), nil, restrictSize, nil);
-//    NSLog(@"calcuted size %@",[NSValue valueWithCGSize:coreTestSize]);
     
     height = coreTestSize.height;
-    height += 5;
+//    height += 5;
     
     return height;
 }

@@ -26,7 +26,7 @@
 }
 
 //static NSString* fuckStr = @"http://fuckyourSelf.com 下面我们来尝试完成一个基于 CoreText 的排版引擎。我们将从最简单的排版功能开始，然后逐步支持图文混排，链接点击等功能。http://baidu.com 我乐呵七大时间啊就是控件";
-static NSString* textStr = @"http://weibo.com/1694819202 hello Indian MI fans~~~\nExcept normal urls\nthis is a taobao url http://taobao.com this is a Github url https://github.com/Roxasora/RxLabel";
+static NSString* textStr = @"(ಥ_ಥ)http://weibo.com/1694819202 hello Indian MI fans~~~\nExcept normal urls this is a taobao url http://taobao.com this is a Github url https://github.com/Roxasora/RxLabel (ಥ_ಥ)";
 #define fontSize 17
 #define lineSpacing 5
 #define labelWidth SCREEN_WIDTH - 40
@@ -42,15 +42,12 @@ static NSString* textStr = @"http://weibo.com/1694819202 hello Indian MI fans~~~
                                 linespacing:lineSpacing];
     
     label = [[RxLabel alloc] initWithFrame:CGRectMake(margin, margin*1.5, labelWidth, height)];
-    
     label.textColor = [UIColor grayColor];
     label.font = [UIFont systemFontOfSize:fontSize];
     label.linespacing = lineSpacing;
     label.backgroundColor = [[UIColor lightGrayColor] colorWithAlphaComponent:0.1];
     label.delegate = self;
-    
     label.text = textStr;
-    
     //if you want to custom the different color and title for particular urls, do like this
     label.customUrlArray = @[
                                 @{
